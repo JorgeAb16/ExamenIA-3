@@ -22,9 +22,21 @@ load_dotenv()
 #   BASE_URL=http://localhost:1234/v1
 #   API_KEY=lm-studio
 #   MODEL=<nombre exacto del modelo cargado en LM Studio>
-BASE_URL = os.getenv("BASE_URL", "https://router.huggingface.co/v1")
-API_KEY = os.getenv("API_KEY", "")
-MODEL = os.getenv("MODEL", "Qwen/Qwen2.5-3B-Instruct")
+def obtener_config(clave: str, valor_por_defecto: str = "") -> str:
+    """Busca la configuración primero en Streamlit Secrets (para el despliegue
+    en la nube) y, si no existe, en las variables de entorno / .env (para
+    ejecución local)."""
+    try:
+        if clave in st.secrets:
+            return st.secrets[clave]
+    except Exception:
+        pass  # No hay archivo de secrets (ej. ejecución local sin secrets.toml)
+    return os.getenv(clave, valor_por_defecto)
+
+
+BASE_URL = obtener_config("BASE_URL", "https://router.huggingface.co/v1")
+API_KEY = obtener_config("API_KEY", "")
+MODEL = obtener_config("MODEL", "Qwen/Qwen2.5-3B-Instruct")
 
 SYSTEM_PROMPT = (
     "Eres un agente tutor académico especializado en tecnología, programación "
