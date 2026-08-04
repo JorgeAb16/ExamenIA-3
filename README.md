@@ -77,4 +77,4 @@ La aplicación muestra mensajes claros cuando:
 
 ## Autor
 
-[Tu nombre completo] — [Fecha]
+Jorge Abraham Fajardo López — 04/08/2026
