@@ -77,4 +77,4 @@ La aplicación muestra mensajes claros cuando:
 
 ## Autor
 
-Jorge Abraham Fajardo López — 04/08/2026
+Jorge Abraham Fajardo López — 20231900189
