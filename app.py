@@ -193,30 +193,20 @@ def consultar_agente(pregunta: str):
 
 
 def procesar_pregunta(pregunta: str):
-    """Consulta al agente y guarda el intercambio en el historial."""
+    """Guarda la pregunta del usuario y dispara la consulta al agente."""
     pregunta = pregunta.strip()
     if not pregunta:
-        st.warning("⚠️ Debes escribir una consulta antes de continuar.")
         return
-
-    with st.spinner("🤔 Consultando al agente..."):
-        respuesta, error = consultar_agente(pregunta)
-
     hora = datetime.now().strftime("%H:%M")
-    if error:
-        st.session_state.historial.append(
-            {"rol": "agente", "contenido": error, "hora": hora, "es_error": True}
-        )
-    else:
-        st.session_state.historial.append({"rol": "usuario", "contenido": pregunta, "hora": hora})
-        st.session_state.historial.append(
-            {"rol": "agente", "contenido": respuesta, "hora": hora, "es_error": False}
-        )
+    st.session_state.historial.append({"rol": "usuario", "contenido": pregunta, "hora": hora})
+    st.session_state.pendiente = pregunta
 
 
 def main():
     if "historial" not in st.session_state:
         st.session_state.historial = []
+    if "pendiente" not in st.session_state:
+        st.session_state.pendiente = None
 
     # ---------------- HEADER ----------------
     st.markdown(
@@ -251,57 +241,60 @@ def main():
             st.rerun()
 
     # ---------------- PREGUNTAS PREESTABLECIDAS ----------------
-    st.markdown("#### ⚡ Preguntas rápidas")
-    st.caption("Haz clic para enviarlas directamente al agente.")
-    columnas = st.columns(3)
-    for i, item in enumerate(PREGUNTAS_PREESTABLECIDAS):
-        with columnas[i % 3]:
-            if st.button(f"{item['icono']} {item['texto']}", key=f"preset_{i}", use_container_width=True):
-                procesar_pregunta(item["texto"])
+    if not st.session_state.historial:
+        st.markdown("#### ⚡ Preguntas rápidas")
+        st.caption("Haz clic para enviarlas directamente al agente.")
+        columnas = st.columns(3)
+        for i, item in enumerate(PREGUNTAS_PREESTABLECIDAS):
+            with columnas[i % 3]:
+                if st.button(f"{item['icono']} {item['texto']}", key=f"preset_{i}", use_container_width=True):
+                    procesar_pregunta(item["texto"])
+                    st.rerun()
+        st.divider()
 
-    st.divider()
-
-    # ---------------- ENTRADA LIBRE ----------------
-    with st.form(key="formulario_pregunta", clear_on_submit=True):
-        pregunta = st.text_area(
-            "✍️ O escribe tu propia consulta:",
-            placeholder="Ejemplo: ¿Qué es la recursividad en programación?",
-            height=100,
-        )
-        enviar = st.form_submit_button("🚀 Consultar al Agente", type="primary", use_container_width=True)
-
-    if enviar:
-        procesar_pregunta(pregunta)
-
-    # ---------------- HISTORIAL DE CONVERSACIÓN ----------------
+    # ---------------- HISTORIAL DE CONVERSACIÓN (estilo chat) ----------------
     if st.session_state.historial:
-        st.markdown("#### 💬 Conversación")
-        for mensaje in reversed(st.session_state.historial):
+        for mensaje in st.session_state.historial:
             if mensaje["rol"] == "usuario":
-                st.markdown(
-                    f"""
-                    <div class="chat-card chat-user">
-                        <div class="chat-meta">🧑‍💻 Tú · {mensaje['hora']}</div>
-                        {mensaje['contenido']}
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
+                with st.chat_message("user", avatar="🧑‍💻"):
+                    st.markdown(mensaje["contenido"])
+                    st.caption(mensaje["hora"])
+            else:
+                with st.chat_message("assistant", avatar="🤖"):
+                    if mensaje.get("es_error"):
+                        st.error(mensaje["contenido"])
+                    else:
+                        st.markdown(mensaje["contenido"])
+                        st.caption(mensaje["hora"])
+    else:
+        st.info("👋 Aún no hay conversación. Usa una pregunta rápida o escribe la tuya abajo para comenzar.")
+
+    # Si hay una pregunta pendiente de responder, la procesamos y mostramos
+    # la respuesta del agente justo debajo de la pregunta del usuario.
+    if st.session_state.pendiente:
+        pregunta = st.session_state.pendiente
+        st.session_state.pendiente = None
+        with st.chat_message("assistant", avatar="🤖"):
+            with st.spinner("🤔 Pensando..."):
+                respuesta, error = consultar_agente(pregunta)
+            hora = datetime.now().strftime("%H:%M")
+            if error:
+                st.error(error)
+                st.session_state.historial.append(
+                    {"rol": "agente", "contenido": error, "hora": hora, "es_error": True}
                 )
             else:
-                if mensaje.get("es_error"):
-                    st.error(mensaje["contenido"])
-                else:
-                    st.markdown(
-                        f"""
-                        <div class="chat-card chat-agent">
-                            <div class="chat-meta">🤖 Agente · {mensaje['hora']}</div>
-                            {mensaje['contenido']}
-                        </div>
-                        """,
-                        unsafe_allow_html=True,
-                    )
-    else:
-        st.info("👋 Aún no hay conversación. Usa una pregunta rápida o escribe la tuya para comenzar.")
+                st.markdown(respuesta)
+                st.caption(hora)
+                st.session_state.historial.append(
+                    {"rol": "agente", "contenido": respuesta, "hora": hora, "es_error": False}
+                )
+
+    # ---------------- BARRA DE ENTRADA FIJA ABAJO ----------------
+    pregunta_nueva = st.chat_input("Escribe tu consulta sobre tecnología, programación o IA...")
+    if pregunta_nueva:
+        procesar_pregunta(pregunta_nueva)
+        st.rerun()
 
 
 if __name__ == "__main__":
