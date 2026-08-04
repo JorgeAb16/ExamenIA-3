@@ -9,6 +9,7 @@ también compatible con LM Studio local cambiando las variables de entorno).
 
 import os
 import streamlit as st
+from datetime import datetime
 from openai import OpenAI, APIConnectionError, APIStatusError
 from dotenv import load_dotenv
 
@@ -52,7 +53,99 @@ SYSTEM_PROMPT = (
     "reformule su pregunta dentro de esos temas."
 )
 
-st.set_page_config(page_title="Agente de IA - Tutor Académico", page_icon="🤖", layout="centered")
+# Preguntas preestablecidas que el usuario puede disparar con un clic
+PREGUNTAS_PREESTABLECIDAS = [
+    {"icono": "🔁", "texto": "¿Qué es la recursividad en programación?"},
+    {"icono": "🧠", "texto": "¿Qué es el machine learning y en qué se diferencia de la IA tradicional?"},
+    {"icono": "🗂️", "texto": "¿Qué es una base de datos relacional?"},
+    {"icono": "☁️", "texto": "¿Qué es la computación en la nube?"},
+    {"icono": "🔒", "texto": "¿Qué es la criptografía y por qué es importante en ciberseguridad?"},
+    {"icono": "🧩", "texto": "¿Qué es la programación orientada a objetos?"},
+]
+
+st.set_page_config(
+    page_title="Agente de IA - Tutor Académico",
+    page_icon="🤖",
+    layout="centered",
+    initial_sidebar_state="expanded",
+)
+
+# ----------------------------------------------------------------------
+# ESTILOS PERSONALIZADOS
+# ----------------------------------------------------------------------
+st.markdown(
+    """
+    <style>
+        .stApp {
+            background: linear-gradient(180deg, #0f1220 0%, #171b2e 100%);
+        }
+        .main-header {
+            padding: 1.6rem 1.8rem;
+            border-radius: 16px;
+            background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 60%, #a855f7 100%);
+            box-shadow: 0 8px 24px rgba(79, 70, 229, 0.35);
+            margin-bottom: 1.4rem;
+        }
+        .main-header h1 {
+            color: #ffffff;
+            font-size: 1.9rem;
+            margin: 0 0 0.3rem 0;
+        }
+        .main-header p {
+            color: rgba(255,255,255,0.9);
+            font-size: 0.98rem;
+            margin: 0;
+        }
+        .badge-row span {
+            display: inline-block;
+            background: rgba(255,255,255,0.18);
+            color: #fff;
+            border-radius: 999px;
+            padding: 3px 12px;
+            font-size: 0.78rem;
+            margin-right: 6px;
+            margin-top: 8px;
+        }
+        div.stButton > button {
+            border-radius: 10px;
+            border: 1px solid rgba(124, 58, 237, 0.35);
+            padding: 0.55rem 0.8rem;
+            font-weight: 500;
+            transition: all 0.15s ease-in-out;
+        }
+        div.stButton > button:hover {
+            border-color: #7c3aed;
+            color: #7c3aed;
+            transform: translateY(-1px);
+        }
+        button[kind="primary"] {
+            background: linear-gradient(135deg, #4f46e5, #7c3aed) !important;
+            border: none !important;
+        }
+        .chat-card {
+            border-radius: 14px;
+            padding: 1rem 1.2rem;
+            margin-bottom: 0.9rem;
+            border: 1px solid rgba(124, 58, 237, 0.18);
+        }
+        .chat-user {
+            background: rgba(124, 58, 237, 0.10);
+        }
+        .chat-agent {
+            background: rgba(255, 255, 255, 0.03);
+        }
+        .chat-meta {
+            font-size: 0.75rem;
+            opacity: 0.6;
+            margin-bottom: 0.35rem;
+        }
+        section[data-testid="stSidebar"] {
+            border-right: 1px solid rgba(124, 58, 237, 0.15);
+        }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 
 def crear_cliente():
@@ -99,38 +192,116 @@ def consultar_agente(pregunta: str):
         return None, f"⚠️ Error inesperado: {error}"
 
 
+def procesar_pregunta(pregunta: str):
+    """Consulta al agente y guarda el intercambio en el historial."""
+    pregunta = pregunta.strip()
+    if not pregunta:
+        st.warning("⚠️ Debes escribir una consulta antes de continuar.")
+        return
+
+    with st.spinner("🤔 Consultando al agente..."):
+        respuesta, error = consultar_agente(pregunta)
+
+    hora = datetime.now().strftime("%H:%M")
+    if error:
+        st.session_state.historial.append(
+            {"rol": "agente", "contenido": error, "hora": hora, "es_error": True}
+        )
+    else:
+        st.session_state.historial.append({"rol": "usuario", "contenido": pregunta, "hora": hora})
+        st.session_state.historial.append(
+            {"rol": "agente", "contenido": respuesta, "hora": hora, "es_error": False}
+        )
+
+
 def main():
-    st.title("🤖 Agente de IA — Tutor Académico")
-    st.write(
-        "Agente conversacional que responde preguntas sobre **tecnología, "
-        "programación e inteligencia artificial**. Cada respuesta incluye "
-        "una explicación, un ejemplo, una aplicación práctica y una "
-        "pregunta de comprobación."
+    if "historial" not in st.session_state:
+        st.session_state.historial = []
+
+    # ---------------- HEADER ----------------
+    st.markdown(
+        """
+        <div class="main-header">
+            <h1>🤖 Agente de IA — Tutor Académico</h1>
+            <p>Resuelve tus dudas de <b>tecnología, programación e inteligencia artificial</b>
+            con explicaciones estructuradas: concepto, ejemplo, aplicación práctica y pregunta de comprobación.</p>
+            <div class="badge-row">
+                <span>💡 Explicación clara</span>
+                <span>🧪 Ejemplo práctico</span>
+                <span>🏭 Caso real</span>
+                <span>✅ Verificación</span>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
     )
 
+    # ---------------- SIDEBAR ----------------
     with st.sidebar:
         st.subheader("⚙️ Configuración de conexión")
         st.caption(f"**Servidor:** {BASE_URL}")
         st.caption(f"**Modelo:** {MODEL}")
+        st.divider()
+        st.subheader("📊 Estadísticas")
+        total_preguntas = sum(1 for m in st.session_state.historial if m["rol"] == "usuario")
+        st.metric("Preguntas realizadas", total_preguntas)
+        st.divider()
+        if st.button("🗑️ Limpiar conversación", use_container_width=True):
+            st.session_state.historial = []
+            st.rerun()
 
-    pregunta = st.text_area(
-        "Escribe tu consulta:",
-        placeholder="Ejemplo: ¿Qué es la recursividad en programación?",
-        height=100,
-    )
+    # ---------------- PREGUNTAS PREESTABLECIDAS ----------------
+    st.markdown("#### ⚡ Preguntas rápidas")
+    st.caption("Haz clic para enviarlas directamente al agente.")
+    columnas = st.columns(3)
+    for i, item in enumerate(PREGUNTAS_PREESTABLECIDAS):
+        with columnas[i % 3]:
+            if st.button(f"{item['icono']} {item['texto']}", key=f"preset_{i}", use_container_width=True):
+                procesar_pregunta(item["texto"])
 
-    if st.button("Consultar al Agente", type="primary"):
-        if not pregunta or not pregunta.strip():
-            st.error("⚠️ Debes escribir una consulta antes de continuar.")
-        else:
-            with st.spinner("Consultando al agente..."):
-                respuesta, error = consultar_agente(pregunta.strip())
+    st.divider()
 
-            if error:
-                st.error(error)
+    # ---------------- ENTRADA LIBRE ----------------
+    with st.form(key="formulario_pregunta", clear_on_submit=True):
+        pregunta = st.text_area(
+            "✍️ O escribe tu propia consulta:",
+            placeholder="Ejemplo: ¿Qué es la recursividad en programación?",
+            height=100,
+        )
+        enviar = st.form_submit_button("🚀 Consultar al Agente", type="primary", use_container_width=True)
+
+    if enviar:
+        procesar_pregunta(pregunta)
+
+    # ---------------- HISTORIAL DE CONVERSACIÓN ----------------
+    if st.session_state.historial:
+        st.markdown("#### 💬 Conversación")
+        for mensaje in reversed(st.session_state.historial):
+            if mensaje["rol"] == "usuario":
+                st.markdown(
+                    f"""
+                    <div class="chat-card chat-user">
+                        <div class="chat-meta">🧑‍💻 Tú · {mensaje['hora']}</div>
+                        {mensaje['contenido']}
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
             else:
-                st.markdown("### 💬 Respuesta del agente")
-                st.markdown(respuesta)
+                if mensaje.get("es_error"):
+                    st.error(mensaje["contenido"])
+                else:
+                    st.markdown(
+                        f"""
+                        <div class="chat-card chat-agent">
+                            <div class="chat-meta">🤖 Agente · {mensaje['hora']}</div>
+                            {mensaje['contenido']}
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+    else:
+        st.info("👋 Aún no hay conversación. Usa una pregunta rápida o escribe la tuya para comenzar.")
 
 
 if __name__ == "__main__":
