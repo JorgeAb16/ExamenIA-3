@@ -41,14 +41,25 @@ MODEL = obtener_config("MODEL", "meta-llama/Llama-3.1-8B-Instruct")
 
 SYSTEM_PROMPT = (
     "Eres un agente tutor académico especializado en tecnología, programación "
-    "e inteligencia artificial. Cuando el usuario pregunte sobre un concepto, "
-    "responde SIEMPRE siguiendo esta estructura, en español:\n\n"
-    "1. **Explicación**: describe el concepto de forma clara y precisa.\n"
-    "2. **Ejemplo**: da un ejemplo concreto que ilustre el concepto.\n"
-    "3. **Aplicación práctica**: menciona un caso real donde se use.\n"
-    "4. **Pregunta de comprobación**: termina con una pregunta breve para "
-    "verificar que el usuario entendió el tema.\n\n"
-    "Si la consulta no está relacionada con tecnología, programación o "
+    "e inteligencia artificial. Mantienes memoria de la conversación: recuerda "
+    "lo que el usuario ya preguntó y, si la nueva pregunta profundiza en el "
+    "mismo tema, responde CON ese contexto en mente en vez de repetir la "
+    "explicación anterior desde cero. Si el usuario cambia claramente de tema, "
+    "trátalo como un tema nuevo sin forzar relación con lo anterior.\n\n"
+    "Reglas de respuesta, en español:\n"
+    "- Si es la PRIMERA pregunta sobre un tema, usa esta estructura completa:\n"
+    "  1. **Explicación**: describe el concepto de forma clara y precisa.\n"
+    "  2. **Ejemplo**: da un ejemplo concreto que ilustre el concepto.\n"
+    "  3. **Aplicación práctica**: menciona un caso real donde se use.\n"
+    "  4. **Pregunta de comprobación**: termina con una pregunta breve para "
+    "verificar que el usuario entendió el tema.\n"
+    "- Si es una pregunta de SEGUIMIENTO sobre algo ya explicado (pide "
+    "profundizar, aclarar, comparar o dar más ejemplos), responde directo a "
+    "eso sin repetir toda la estructura anterior; puedes omitir las secciones "
+    "que no apliquen y cerrar igualmente con una pregunta breve de "
+    "comprobación o con una invitación a seguir profundizando o cambiar de tema.\n"
+    "- Sé conciso y evita relleno innecesario; prioriza claridad sobre extensión.\n"
+    "- Si la consulta no está relacionada con tecnología, programación o "
     "inteligencia artificial, indícalo amablemente y pide al usuario que "
     "reformule su pregunta dentro de esos temas."
 )
@@ -152,16 +163,32 @@ def crear_cliente():
     return OpenAI(base_url=BASE_URL, api_key=API_KEY)
 
 
-def consultar_agente(pregunta: str):
-    """Envía la pregunta al modelo. Retorna (respuesta, None) o (None, error)."""
+def construir_mensajes(pregunta: str, historial: list, max_turnos: int = 6):
+    """Arma la lista de mensajes para la API incluyendo el historial reciente,
+    para que el agente recuerde el contexto de la conversación."""
+    mensajes = [{"role": "system", "content": SYSTEM_PROMPT}]
+
+    # Solo tomamos los últimos N intercambios (usuario+agente) para no exceder
+    # el contexto del modelo, y descartamos mensajes de error.
+    historial_valido = [m for m in historial if not m.get("es_error")]
+    recientes = historial_valido[-(max_turnos * 2):]
+
+    for mensaje in recientes:
+        rol = "user" if mensaje["rol"] == "usuario" else "assistant"
+        mensajes.append({"role": rol, "content": mensaje["contenido"]})
+
+    mensajes.append({"role": "user", "content": pregunta})
+    return mensajes
+
+
+def consultar_agente(pregunta: str, historial: list):
+    """Envía la pregunta (con el historial de la conversación) al modelo.
+    Retorna (respuesta, None) o (None, error)."""
     try:
         cliente = crear_cliente()
         respuesta = cliente.chat.completions.create(
             model=MODEL,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": pregunta},
-            ],
+            messages=construir_mensajes(pregunta, historial),
             temperature=0.7,
             max_tokens=700,
         )
@@ -276,7 +303,10 @@ def main():
         st.session_state.pendiente = None
         with st.chat_message("assistant", avatar="🤖"):
             with st.spinner("🤔 Pensando..."):
-                respuesta, error = consultar_agente(pregunta)
+                # Excluimos la última entrada (la pregunta que se acaba de
+                # agregar) para no duplicarla dentro de construir_mensajes.
+                historial_previo = st.session_state.historial[:-1]
+                respuesta, error = consultar_agente(pregunta, historial_previo)
             hora = datetime.now().strftime("%H:%M")
             if error:
                 st.error(error)
