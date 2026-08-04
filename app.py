@@ -36,7 +36,7 @@ def obtener_config(clave: str, valor_por_defecto: str = "") -> str:
 
 BASE_URL = obtener_config("BASE_URL", "https://router.huggingface.co/v1")
 API_KEY = obtener_config("API_KEY", "")
-MODEL = obtener_config("MODEL", "Qwen/Qwen2.5-3B-Instruct")
+MODEL = obtener_config("MODEL", "meta-llama/Llama-3.1-8B-Instruct")
 
 SYSTEM_PROMPT = (
     "Eres un agente tutor académico especializado en tecnología, programación "
